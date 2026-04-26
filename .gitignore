@@ -1,5 +1,13 @@
+# Python environments
+venv/
+env/
 __pycache__/
 *.pyc
-venv/
-.env
-Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Model
+dataset/
+*.h5
