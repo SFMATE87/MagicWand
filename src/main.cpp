@@ -96,7 +96,7 @@ void loop() {
     }
   }
 
-  delay(10);
+  delay(20);
 }
 
 char get_gesture(int8_t* predictions) {
