@@ -51,6 +51,7 @@ def load_data():
 
 print("Loading data...")
 X, y = load_data()
+X = X - np.mean(X, axis=1, keepdims=True) #for not looking the 1G
 print(f"Input data (X) shape: {X.shape}")
 print(f"Labels (y) shape: {y.shape}")
 

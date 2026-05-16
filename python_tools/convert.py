@@ -34,6 +34,7 @@ def representative_data_gen():
                     if df.shape[0] == TIME_STEPS and df.shape[1] == FEATURES:
                         #batch of 1: (1, 100, 6)
                         data = np.array(df.values, dtype=np.float32)
+                        data = data - np.mean(data, axis=0, keepdims=True)
                         data = np.expand_dims(data, axis=0)
                         yield [data]
                         

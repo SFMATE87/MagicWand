@@ -10,7 +10,7 @@
 
 Adafruit_MPU6050 mpu;
 
-int8_t ring_bf[100][6];
+float ring_bf[100][6];
 int sample_count = 0;
 int head = 0;
 
@@ -28,6 +28,8 @@ char get_gesture(int8_t* predictions);
 
 void setup() {
   Serial.begin(115200);
+
+  pinMode(2, OUTPUT);
 
   if(!mpu.begin()){
     Serial.println("Critical Error: MPU6050 Not Found");
@@ -62,44 +64,74 @@ void setup() {
 }
 
 void loop() {
+  if (sample_count == 0) {
+      digitalWrite(2, HIGH); 
+    }
+
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
 
   //Limits: -128...127
-  ring_bf[head][0] = constrain(round(a.acceleration.x / input_scale) + input_zero_point, -128, 127);
-  ring_bf[head][1] = constrain(round(a.acceleration.y / input_scale) + input_zero_point, -128, 127);
-  ring_bf[head][2] = constrain(round(a.acceleration.z / input_scale) + input_zero_point, -128, 127);
-  ring_bf[head][3] = constrain(round(g.gyro.x / input_scale) + input_zero_point, -128, 127);
-  ring_bf[head][4] = constrain(round(g.gyro.y / input_scale) + input_zero_point, -128, 127);
-  ring_bf[head][5] = constrain(round(g.gyro.z / input_scale) + input_zero_point, -128, 127);
+  ring_bf[head][0] = a.acceleration.x;
+  ring_bf[head][1] = a.acceleration.y;
+  ring_bf[head][2] = a.acceleration.z;
+  ring_bf[head][3] = g.gyro.x;
+  ring_bf[head][4] = g.gyro.y;
+  ring_bf[head][5] = g.gyro.z;
 
   head = (head + 1) % 100;
-  if (sample_count < 100) {
-      sample_count++;
-  }
+  sample_count++;
 
   //Only if there are 100 data
   if(sample_count >= 100){
+    digitalWrite(2, LOW);
+
+    float means[6] = {0, 0, 0, 0, 0, 0};
     for (int i = 0; i < 100; i++) {
       for (int j = 0; j < 6; j++) {
-        input->data.int8[6 * i + j] = ring_bf[(head + i) % 100][j]; 
+        means[j] += ring_bf[i][j]; 
+      }
+    }
+    for (int j = 0; j < 6; j++) {
+        means[j] /= 100.0f;
+    }
+
+    for (int i = 0; i < 100; i++) {
+        for (int j = 0; j < 6; j++) {
+          float centered_val = ring_bf[(head + i) % 100][j] - means[j]; //minus 1G
+          
+          //Quantization
+          input->data.int8[6 * i + j] = constrain(round(centered_val / input_scale) + input_zero_point, -128, 127);
       }
     }
 
     interpreter->Invoke();
-
     char detected_gesture = get_gesture(output->data.int8);
 
-    if (detected_gesture != ' ') {
-      Serial.println(detected_gesture); 
-      sample_count = 0;                 
-    }
-  }
+    Serial.println("-------------");
+      if (detected_gesture != '-') {
+        Serial.print("RECOGNISED GESTURE: ");
+        Serial.println(detected_gesture); 
+      } else {
+        Serial.println("IDLE / NOISE");
+      }
+      Serial.println("-------------");
 
-  delay(20);
+    delay(1000);
+    sample_count = 0;                 
+  }
+  if (sample_count > 0) {
+      delay(20); 
+    }
 }
 
 char get_gesture(int8_t* predictions) {
+  //debug telemtria
+  Serial.print(" | I: "); Serial.print(predictions[0]);
+  Serial.print(" | z: "); Serial.print(predictions[1]);
+  Serial.print(" | O: "); Serial.print(predictions[2]);
+  Serial.print("Idle: "); Serial.println(predictions[3]);
+
   int8_t max_val = -128; 
   int max_index = 0;
 
@@ -109,14 +141,14 @@ char get_gesture(int8_t* predictions) {
       max_val = predictions[i];
     }
   }
-  if(max_val <= 50){
-    return ' '; //Not sure enough 
+  if(max_val <= 80){
+    return '-'; //Not sure enough 
   }
 
-  if (max_index == 0) return ' '; //Idle
-  if (max_index == 1) return 'I';
+  if (max_index == 0) return 'I';
+  if (max_index == 1) return 'Z';
   if (max_index == 2) return 'O';
-  if (max_index == 3) return 'Z';
+  if (max_index == 3) return '-';
 
   return '?';
 }
